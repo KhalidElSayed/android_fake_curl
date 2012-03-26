@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    
+    <!-- Hi, I am an imaginary copyright notice -->
+    
+    <string name="shader_transition_vs">
+        attribute vec4 aPosition;
+        uniform vec2 uCurlPos;
+        uniform vec2 uCurlDir;
+        uniform vec2 uAspectRatio;
+        varying vec2 vTextureCoord;
+        varying vec2 vTextureCoordProj;
+        varying vec2 vTextureCoordMirrored;
+        void main() {
+            gl_Position = aPosition;
+            vTextureCoord = (gl_Position.xy + 1.0) * 0.5;
+            vTextureCoord *= uAspectRatio;
+            
+            vec2 curlPos = uCurlPos * uAspectRatio;
+            vec2 curlVec = normalize(uCurlDir * uAspectRatio);
+            vec2 projVec = dot(vTextureCoord - curlPos, curlVec) * curlVec;
+            
+            vTextureCoordProj = curlPos + projVec;
+            vTextureCoordMirrored = 2.0 * vTextureCoordProj - vTextureCoord;
+        }
+    </string>
+    <string name="shader_transition_fs">
+        precision highp float;
+        uniform sampler2D sTextureTop;
+        uniform sampler2D sTextureBottom;
+        uniform vec2 uAspectRatio;
+        uniform vec2 uAspectRatioInv;
+        varying vec2 vTextureCoord;
+        varying vec2 vTextureCoordProj;
+        varying vec2 vTextureCoordMirrored;
+        
+        vec4 getPixel(sampler2D sampler, vec2 texCoord) {
+            texCoord *= uAspectRatioInv;
+            texCoord.y = -texCoord.y;
+            return texture2D(sampler, texCoord);
+        }
+        
+        void main() {
+            if (vTextureCoord.x > vTextureCoordProj.x) {
+                /* Bottom page */
+                gl_FragColor = getPixel(sTextureBottom, vTextureCoord);
+                float c = 0.3 + clamp(length((vTextureCoord - vTextureCoordProj) * max(uAspectRatioInv.x, uAspectRatioInv.y)) * 8.0, 0.0, 0.7);
+                gl_FragColor *= c;
+            } else {
+                /* Back of front page */
+                if (clamp(vTextureCoordMirrored, vec2(0.0), uAspectRatio) == vTextureCoordMirrored) {
+                    gl_FragColor = getPixel(sTextureTop, vTextureCoordMirrored);
+                    gl_FragColor *= 0.2 + clamp(length((vTextureCoord - vTextureCoordProj) * max(uAspectRatioInv.x, uAspectRatioInv.y)) * 10.0, 0.0, 0.8);
+                    gl_FragColor.rgb = gl_FragColor.bgr;
+                }
+                /* Front of front page */
+                else {
+                    gl_FragColor = getPixel(sTextureTop, vTextureCoord);
+                    vec2 c1 = max(vec2(0.0), -vTextureCoordMirrored);
+                    vec2 c2 = max(vec2(0.0), vTextureCoordMirrored - uAspectRatio);
+                    float c = 0.3 + clamp(length(max(c1, c2) * max(uAspectRatioInv.x, uAspectRatioInv.y)) * 8.0, 0.0, 0.7);
+                    gl_FragColor *= c;
+                }
+            }
+        }
+    </string>
+
+</resources>
